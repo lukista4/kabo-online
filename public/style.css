@@ -198,3 +198,11 @@ table.scores tr.win td { color: var(--accent); font-weight: 700; }
   .table { gap: 12px; }
   .logo h1 { font-size: 48px; }
 }
+
+/* KŠEFT animation */
+.card.flying-hidden { background: transparent !important; border: 2px dashed rgba(255, 201, 219, .55) !important; box-shadow: none !important; }
+.card.flying-hidden > *, .card.flying-hidden::before, .card.flying-hidden::after { visibility: hidden; }
+.card.flyer { position: fixed; margin: 0; z-index: 40; pointer-events: none; transform-origin: top left;
+  box-shadow: 0 0 0 3px #ff8fb5, 0 0 30px rgba(255, 110, 170, .8), 0 12px 24px rgba(0,0,0,.5); }
+.card.flash-swapdone { animation: flashswap 6s ease-out; }
+@keyframes flashswap { 0%, 80% { box-shadow: 0 0 0 4px #ff8fb5, 0 0 26px rgba(255, 110, 170, .9); } 100% { box-shadow: 0 3px 8px rgba(0,0,0,.35); } }

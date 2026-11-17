@@ -30,6 +30,7 @@ const ui = {
   showScores: false, hideResult: false, resultRound: 0,
   chat: [],
   wasMyTurn: false,
+  flying: new Set(),          // card ids hidden while their KŠEFT copy flies
 };
 
 const EFF = { 7: 'KUK', 8: 'KUK', 9: 'ŠPION', 10: 'ŠPION', 11: 'KŠEFT', 12: 'KŠEFT' };
@@ -67,6 +68,8 @@ socket.on('chat', m => {
 });
 socket.on('state', st => {
   autoJoining = false;
+  const hadGame = !!(S && S.game);
+  let swapAnim = null;
   S = st;
   store.set('kabo.room', st.code);
   if (new URLSearchParams(location.search).get('r') !== st.code) history.replaceState(null, '', '?r=' + st.code + (AS ? '&as=' + AS : ''));
@@ -76,10 +79,18 @@ socket.on('state', st => {
     if (key !== ui.stepKey) { ui.stepKey = key; ui.sel.clear(); ui.swapMine = ui.swapOther = null; }
     if (g.highlight && g.highlight.n !== ui.hlSeen) {
       ui.hlSeen = g.highlight.n;
-      ui.hlIds = new Set(g.highlight.cardIds);
-      ui.hlKind = g.highlight.kind;
-      clearTimeout(ui.hlTimer);
-      ui.hlTimer = setTimeout(() => { ui.hlIds = new Set(); render(); }, 2700);
+      const { cardIds, kind } = g.highlight;
+      if (!hadGame) {
+        // just (re)connected: don't replay an old highlight
+      } else if (kind === 'swap') {
+        const last = g.log[g.log.length - 1];
+        if (last) toast('🔀 ' + last.text, 'info');
+        swapAnim = captureSwap(cardIds);           // old positions, before re-render
+        if (swapAnim) ui.flying = new Set(cardIds);
+        else setHl(cardIds, 'swapdone', 6000);
+      } else {
+        setHl(cardIds, kind, 2700);
+      }
     }
     if (g.round !== ui.resultRound) { ui.resultRound = g.round; ui.hideResult = false; }
     const myTurn = g.phase === 'play' && g.turnPid === st.me;
@@ -90,7 +101,67 @@ socket.on('state', st => {
     document.title = 'Kabo online';
   }
   render();
+  if (swapAnim) runSwap(swapAnim);
 });
+
+function setHl(ids, kind, ms) {
+  ui.hlIds = new Set(ids);
+  ui.hlKind = kind;
+  clearTimeout(ui.hlTimer);
+  ui.hlTimer = setTimeout(() => { ui.hlIds = new Set(); render(); }, ms);
+}
+
+// ---------- KŠEFT animation: the two cards fly slowly to each other's place ----------
+function captureSwap(ids) {
+  if (document.hidden || ids.length !== 2) return null;
+  const old = {};
+  for (const id of ids) {
+    const el = $app.querySelector(`.hand [data-cid="${id}"]`);
+    if (!el) return null;
+    old[id] = { rect: el.getBoundingClientRect(), html: el.outerHTML };
+  }
+  return { ids, old };
+}
+
+function runSwap({ ids, old }) {
+  const clones = [];
+  const runs = ids.map(id => {
+    const el = $app.querySelector(`.hand [data-cid="${id}"]`);
+    const o = old[id];
+    if (!el) return null;
+    const n = el.getBoundingClientRect();
+    const box = document.createElement('div');
+    box.innerHTML = o.html;
+    const c = box.firstElementChild;
+    c.className = c.className.replace(/\b(clickable|selected|flying-hidden|flash-\w+)\b/g, '');
+    c.classList.add('flyer');
+    c.removeAttribute('data-act');
+    Object.assign(c.style, {
+      left: o.rect.left + 'px', top: o.rect.top + 'px',
+      width: o.rect.width + 'px', height: o.rect.height + 'px',
+    });
+    c.style.setProperty('--cw', o.rect.width + 'px');
+    c.style.setProperty('--ch', o.rect.height + 'px');
+    document.body.appendChild(c);
+    clones.push(c);
+    const dx = n.left - o.rect.left, dy = n.top - o.rect.top;
+    const sx = n.width / o.rect.width, sy = n.height / o.rect.height;
+    const lift = Math.min(60, 20 + Math.abs(dx) * 0.1);
+    return c.animate([
+      { transform: 'translate(0, 0) scale(1)' },
+      { transform: 'translate(0, -12px) scale(1.18)', offset: 0.25 },
+      { transform: `translate(${dx / 2}px, ${dy / 2 - lift}px) scale(${(1.18 + sx) / 2 + 0.1})`, offset: 0.6 },
+      { transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})` },
+    ], { duration: 2200, easing: 'ease-in-out', fill: 'forwards' }).finished;
+  }).filter(Boolean);
+  const done = () => {
+    clones.forEach(c => c.remove());
+    ui.flying = new Set();
+    setHl(ids, 'swapdone', 6000);
+    render();
+  };
+  Promise.all(runs).then(done, done);
+}
 
 function setConn(ok) {
   let el = document.getElementById('conn');
@@ -131,7 +202,9 @@ function cardHTML(c, o = {}) {
   if (o.selected) cls.push('selected');
   if (o.dim) cls.push('dim');
   if (c.id && ui.hlIds.has(c.id)) cls.push('flash-' + ui.hlKind);
-  const attrs = o.act ? ` data-act="${o.act}" data-id="${esc(c.id || '')}"` : '';
+  if (c.id && ui.flying.has(c.id)) cls.push('flying-hidden');
+  let attrs = o.act ? ` data-act="${o.act}" data-id="${esc(c.id || '')}"` : '';
+  if (c.id) attrs += ` data-cid="${esc(c.id)}"`;
   const title = known ? (c.peeked ? 'Vidíš jen ty' : c.remembered ? 'Pamatuješ si (nápověda)' : c.up ? 'Lícem nahoru — vidí všichni' : '') : '';
   return `<div class="${cls.join(' ')}"${attrs}${title ? ` title="${title}"` : ''}>${inner}</div>`;
 }
@@ -207,6 +280,10 @@ function lobbyHTML() {
     <div style="margin-top:14px">
       <label class="check"><input type="checkbox" data-act="memoryAid" ${S.settings.memoryAid ? 'checked' : ''} ${isHost ? '' : 'disabled'}>
         <span>Nápověda paměti<br><span class="muted" style="font-size:12px">Karty, které jsi už viděl(a), zůstanou poloprůhledně odkryté. Podle pravidel si je máte pamatovat — doporučeno vypnuté.</span></span></label>
+    </div>
+    <div style="margin-top:12px">
+      <label class="check"><input type="checkbox" data-act="discardFaceDown" ${S.settings.discardFaceDown !== false ? 'checked' : ''} ${isHost ? '' : 'disabled'}>
+        <span>Karta z odhazovací hromádky se pokládá lícem dolů<br><span class="muted" style="font-size:12px">Ostatní si ji musí zapamatovat. Vypnuto = oficiální pravidlo (lícem nahoru).</span></span></label>
     </div>
     <div class="row" style="margin-top:16px">
       ${isHost
@@ -309,7 +386,7 @@ function gameHTML() {
         const eff = EFF[v];
         msg = g.drawn.from === 'deck'
           ? `Lízl(a) jsi <b>${v}</b>. Klikni na svou kartu (nebo víc karet se <b>stejnou</b> hodnotou), za kterou ji vyměníš — nebo ji odhoď${eff ? ` a použij efekt <b>${eff}</b>` : ''}.`
-          : `Vzal(a) jsi <b>${v}</b>. Klikni na svou kartu (nebo víc karet se <b>stejnou</b> hodnotou), za kterou ji vyměníš. Položí se lícem nahoru.`;
+          : `Vzal(a) jsi <b>${v}</b>. Klikni na svou kartu (nebo víc karet se <b>stejnou</b> hodnotou), za kterou ji vyměníš. Položí se lícem ${g.settings.discardFaceDown ? 'dolů' : 'nahoru'}.`;
         btns = `<button class="primary" data-act="doSwap" ${n ? '' : 'disabled'}>Vyměnit${n > 1 ? ` ${n} karty` : ''}</button>`
           + (g.drawn.from === 'deck'
             ? `<button data-act="discard">Odhodit${eff ? ' + ' + eff : ''}</button>`
@@ -437,6 +514,7 @@ $app.addEventListener('keydown', e => {
 
 $app.addEventListener('change', e => {
   if (e.target.dataset.act === 'memoryAid') socket.emit('settings', { memoryAid: e.target.checked });
+  if (e.target.dataset.act === 'discardFaceDown') socket.emit('settings', { discardFaceDown: e.target.checked });
 });
 
 $app.addEventListener('click', e => {

@@ -23,7 +23,7 @@ class Game {
     // players: [{id, name}] in seat order
     this.order = players.map(p => p.id);
     this.names = Object.fromEntries(players.map(p => [p.id, p.name]));
-    this.settings = { memoryAid: !!settings.memoryAid };
+    this.settings = { memoryAid: !!settings.memoryAid, discardFaceDown: settings.discardFaceDown !== false };
     this.totals = Object.fromEntries(this.order.map(id => [id, 0]));
     this.usedReset = Object.fromEntries(this.order.map(id => [id, false]));
     this.history = []; // per round: {round, scores:{pid:n}}
@@ -188,7 +188,8 @@ class Game {
     idxs.sort((a, b) => a - b);
     const selected = idxs.map(i => hand[i]);
     const { card: newCard, from } = this.drawn;
-    newCard.up = from === 'discard';
+    // official rule: a card from the discard pile goes face up; house rule (default): face down
+    newCard.up = from === 'discard' && !this.settings.discardFaceDown;
     const allSame = selected.every(c => c.v === selected[0].v);
     const who = this.name(pid);
     const srcText = from === 'deck' ? 'kartu z balíčku' : `${newCard.v} z hromádky`;

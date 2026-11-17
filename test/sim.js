@@ -127,7 +127,15 @@ function scoringTests() {
   g4.swap(q, [g4.hands[q][0].id, g4.hands[q][2].id]);
   assert.strictEqual(g4.hands[q].length, 3);
   assert.strictEqual(g4.hands[q][0], top);
-  assert.strictEqual(top.up, true);
+  assert.strictEqual(top.up, false, 'house rule: card from discard goes face down');
+  assert.strictEqual(g4.viewFor(g4.order.find(x => x !== q)).hands[q][0].v, undefined, 'opponent must not see it');
+  // official rule option: face up
+  const g5 = new Game([{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }], { discardFaceDown: false });
+  for (const q2 of g5.order) { g5.peekChoose(q2, g5.hands[q2][0].id); g5.peekChoose(q2, g5.hands[q2][1].id); g5.peekDone(q2); }
+  g5.drawDiscard(g5.turnPid);
+  const t5 = g5.drawn.card;
+  g5.swap(g5.turnPid, [g5.hands[g5.turnPid][0].id]);
+  assert.strictEqual(t5.up, true);
   console.log('scoring/unit checks OK');
 }
 
@@ -138,7 +146,7 @@ const t0 = Date.now();
 for (let i = 0; i < 3000; i++) {
   const n = 2 + (i % 5);
   const players = Array.from({ length: n }, (_, k) => ({ id: 'p' + k, name: 'P' + k }));
-  const g = new Game(players, { memoryAid: i % 2 === 0 });
+  const g = new Game(players, { memoryAid: i % 2 === 0, discardFaceDown: i % 3 !== 0 });
   let guard = 0;
   while (g.phase !== 'gameEnd') {
     if (g.phase === 'roundEnd') { g.nextRound(); rounds++; continue; }
