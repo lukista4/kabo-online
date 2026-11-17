@@ -285,6 +285,10 @@ function lobbyHTML() {
       <label class="check"><input type="checkbox" data-act="discardFaceDown" ${S.settings.discardFaceDown !== false ? 'checked' : ''} ${isHost ? '' : 'disabled'}>
         <span>Karta z odhazovací hromádky se pokládá lícem dolů<br><span class="muted" style="font-size:12px">Ostatní si ji musí zapamatovat. Vypnuto = oficiální pravidlo (lícem nahoru).</span></span></label>
     </div>
+    <div style="margin-top:12px">
+      <label class="check"><input type="checkbox" data-act="startDiscard" ${S.settings.startDiscard ? 'checked' : ''} ${isHost ? '' : 'disabled'}>
+        <span>Na začátku kola otočit jednu kartu na odhazovací hromádku<br><span class="muted" style="font-size:12px">Vypnuto = hromádka začíná prázdná a první hráč musí líznout z balíčku. Zapnuto = oficiální pravidlo.</span></span></label>
+    </div>
     <div class="row" style="margin-top:16px">
       ${isHost
         ? `<button class="primary" data-act="start" ${S.players.length < 2 ? 'disabled' : ''} style="flex:1">${S.players.length < 2 ? 'Čekáme na hráče…' : 'Začít hru'}</button>`
@@ -376,9 +380,11 @@ function gameHTML() {
   } else if (g.phase === 'play') {
     if (myTurn) {
       if (g.step === 'choose') {
-        msg = '<b>Jsi na tahu!</b> Lízni z balíčku, vezmi kartu z odhazovací hromádky, nebo zvolej Kabo.';
+        msg = g.discardTop
+          ? '<b>Jsi na tahu!</b> Lízni z balíčku, vezmi kartu z odhazovací hromádky, nebo zvolej Kabo.'
+          : '<b>Jsi na tahu!</b> Odhazovací hromádka je prázdná — lízni z balíčku, nebo zvol Kabo.';
         btns = `<button class="primary" data-act="drawDeck">Líznout z balíčku</button>
-                <button data-act="drawDiscard" ${g.discardTop ? '' : 'disabled'}>Vzít ${g.discardTop ? g.discardTop.v : ''} z hromádky</button>
+                ${g.discardTop ? `<button data-act="drawDiscard">Vzít ${g.discardTop.v} z hromádky</button>` : ''}
                 ${g.kaboBy ? '' : '<button class="kabo" data-act="kabo">KABO!</button>'}`;
       } else if (g.step === 'drawn') {
         const v = g.drawn.v;
@@ -515,6 +521,7 @@ $app.addEventListener('keydown', e => {
 $app.addEventListener('change', e => {
   if (e.target.dataset.act === 'memoryAid') socket.emit('settings', { memoryAid: e.target.checked });
   if (e.target.dataset.act === 'discardFaceDown') socket.emit('settings', { discardFaceDown: e.target.checked });
+  if (e.target.dataset.act === 'startDiscard') socket.emit('settings', { startDiscard: e.target.checked });
 });
 
 $app.addEventListener('click', e => {

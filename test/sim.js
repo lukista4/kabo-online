@@ -118,7 +118,7 @@ function scoringTests() {
   assert.strictEqual(g3.hands[p].length, 6);
   assert.deepStrictEqual(g3.hands[p].slice(0, 3).map(c => c.up), [true, true, true]);
   // successful double swap → row shrinks by one
-  const g4 = new Game([{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }]);
+  const g4 = new Game([{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }], { startDiscard: true });
   for (const q of g4.order) { g4.peekChoose(q, g4.hands[q][0].id); g4.peekChoose(q, g4.hands[q][1].id); g4.peekDone(q); }
   const q = g4.turnPid;
   g4.hands[q] = mk([5, 7, 5, 9]);
@@ -130,7 +130,7 @@ function scoringTests() {
   assert.strictEqual(top.up, false, 'house rule: card from discard goes face down');
   assert.strictEqual(g4.viewFor(g4.order.find(x => x !== q)).hands[q][0].v, undefined, 'opponent must not see it');
   // official rule option: face up
-  const g5 = new Game([{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }], { discardFaceDown: false });
+  const g5 = new Game([{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }], { discardFaceDown: false, startDiscard: true });
   for (const q2 of g5.order) { g5.peekChoose(q2, g5.hands[q2][0].id); g5.peekChoose(q2, g5.hands[q2][1].id); g5.peekDone(q2); }
   g5.drawDiscard(g5.turnPid);
   const t5 = g5.drawn.card;
@@ -140,13 +140,25 @@ function scoringTests() {
 }
 
 scoringTests();
+{ // discard pile: empty at start by default (house rule), one card with the official option
+  const ps = [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }];
+  const d = new Game(ps);
+  assert.strictEqual(d.discard.length, 0);
+  assert.strictEqual(d.deck.length, 52 - 8);
+  for (const p of d.order) { d.peekChoose(p, d.hands[p][0].id); d.peekChoose(p, d.hands[p][1].id); d.peekDone(p); }
+  assert.throws(() => d.drawDiscard(d.turnPid), GameError);
+  const o = new Game(ps, { startDiscard: true });
+  assert.strictEqual(o.discard.length, 1);
+  assert.strictEqual(o.discard[0].up, true);
+  console.log('start-discard checks OK');
+}
 
 let games = 0, rounds = 0, moves = 0, errors = 0;
 const t0 = Date.now();
 for (let i = 0; i < 3000; i++) {
   const n = 2 + (i % 5);
   const players = Array.from({ length: n }, (_, k) => ({ id: 'p' + k, name: 'P' + k }));
-  const g = new Game(players, { memoryAid: i % 2 === 0, discardFaceDown: i % 3 !== 0 });
+  const g = new Game(players, { memoryAid: i % 2 === 0, discardFaceDown: i % 3 !== 0, startDiscard: i % 4 === 0 });
   let guard = 0;
   while (g.phase !== 'gameEnd') {
     if (g.phase === 'roundEnd') { g.nextRound(); rounds++; continue; }

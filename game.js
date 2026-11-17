@@ -23,7 +23,11 @@ class Game {
     // players: [{id, name}] in seat order
     this.order = players.map(p => p.id);
     this.names = Object.fromEntries(players.map(p => [p.id, p.name]));
-    this.settings = { memoryAid: !!settings.memoryAid, discardFaceDown: settings.discardFaceDown !== false };
+    this.settings = {
+      memoryAid: !!settings.memoryAid,
+      discardFaceDown: settings.discardFaceDown !== false,
+      startDiscard: settings.startDiscard === true, // official: flip one card at start; house rule (default): empty pile
+    };
     this.totals = Object.fromEntries(this.order.map(id => [id, 0]));
     this.usedReset = Object.fromEntries(this.order.map(id => [id, false]));
     this.history = []; // per round: {round, scores:{pid:n}}
@@ -53,9 +57,12 @@ class Game {
     this.deck = buildDeck();
     this.hands = {};
     for (const pid of this.order) this.hands[pid] = this.deck.splice(0, 4);
-    const first = this.deck.shift();
-    first.up = true;
-    this.discard = [first];
+    this.discard = [];
+    if (this.settings.startDiscard) {
+      const first = this.deck.shift();
+      first.up = true;
+      this.discard.push(first);
+    }
     this.known = Object.fromEntries(this.order.map(id => [id, new Set()]));
     this.peekChosen = Object.fromEntries(this.order.map(id => [id, []]));
     this.peekReady = Object.fromEntries(this.order.map(id => [id, false]));

@@ -72,7 +72,7 @@ io.on('connection', socket => {
     if (!name) return err('Zadej jméno.');
     if (!token) return err('Chybí token.');
     const code = newCode();
-    const r = { code, players: [], hostId: null, settings: { memoryAid: false, discardFaceDown: true }, game: null, lastActive: Date.now() };
+    const r = { code, players: [], hostId: null, settings: { memoryAid: false, discardFaceDown: true, startDiscard: false }, game: null, lastActive: Date.now() };
     const p = { id: newId(), token, name, sockets: new Set() };
     r.players.push(p);
     r.hostId = p.id;
@@ -116,11 +116,12 @@ io.on('connection', socket => {
   }
   const isHost = () => room && player && room.hostId === player.id;
 
-  socket.on('settings', guard(({ memoryAid, discardFaceDown }) => {
+  socket.on('settings', guard(({ memoryAid, discardFaceDown, startDiscard }) => {
     if (!isHost()) throw new GameError('Nastavení mění jen zakladatel.');
     if (room.game && room.game.phase !== 'gameEnd') throw new GameError('Během hry nastavení měnit nejde.');
     if (memoryAid !== undefined) room.settings.memoryAid = !!memoryAid;
     if (discardFaceDown !== undefined) room.settings.discardFaceDown = !!discardFaceDown;
+    if (startDiscard !== undefined) room.settings.startDiscard = !!startDiscard;
   }));
 
   socket.on('kick', guard(({ pid }) => {
